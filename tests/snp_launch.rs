@@ -60,12 +60,10 @@ fn snp() {
     let launcher = Launcher::new(vm_fd, sev).unwrap();
 
     let start = Start::new(
-        None,
         Policy {
             flags: PolicyFlags::SMT,
             ..Default::default()
         },
-        false,
         [0; 16],
     );
 
@@ -77,9 +75,7 @@ fn snp() {
     let update = Update::new(
         mem_region.guest_phys_addr >> 12,
         address_space,
-        false,
         PageType::Normal,
-        (dp, dp, dp),
     );
 
     launcher.update_data(update).unwrap();

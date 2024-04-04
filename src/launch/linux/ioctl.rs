@@ -39,7 +39,7 @@ impl_const_id! {
     sev::LaunchAttestation<'_> = 20,
 
     snp::Init = 22,
-    snp::LaunchStart<'_> = 23,
+    snp::LaunchStart = 23,
     snp::LaunchUpdate<'_> = 24,
     snp::LaunchFinish<'_> = 25,
 }

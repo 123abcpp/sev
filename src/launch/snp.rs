@@ -163,27 +163,20 @@ impl From<Policy> for u64 {
 
 /// Encapsulates the various data needed to begin the launch process.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Start<'a> {
-    /// The userspace address of the migration agent region to be encrypted.
-    pub(crate) ma_uaddr: Option<&'a [u8]>,
-
+pub struct Start {
     /// Describes a policy that the AMD Secure Processor will enforce.
     pub(crate) policy: Policy,
 
-    /// Indicates that this launch flow is launching an IMI for the purpose of guest-assisted migration.
-    pub(crate) imi_en: bool,
-
     /// Hypervisor provided value to indicate guest OS visible workarounds.The format is hypervisor defined.
     pub(crate) gosvw: [u8; 16],
+
 }
 
-impl<'a> Start<'a> {
+impl Start {
     /// Encapsulate all data needed for the SNP_LAUNCH_START ioctl.
-    pub fn new(ma_uaddr: Option<&'a [u8]>, policy: Policy, imi_en: bool, gosvw: [u8; 16]) -> Self {
+    pub fn new(policy: Policy, gosvw: [u8; 16]) -> Self {
         Self {
-            ma_uaddr,
             policy,
-            imi_en,
             gosvw,
         }
     }
@@ -198,20 +191,9 @@ pub struct Update<'a> {
     /// The userspace of address of the encrypted region.
     pub(crate) uaddr: &'a [u8],
 
-    /// Indicates that this page is part of the IMI of the guest.
-    pub(crate) imi_page: bool,
-
     /// Encoded page type.
     pub(crate) page_type: PageType,
 
-    /// VMPL3 permission mask.
-    pub(crate) vmpl3_perms: VmplPerms,
-
-    /// VMPL2 permission mask.
-    pub(crate) vmpl2_perms: VmplPerms,
-
-    /// VMPL1 permission mask.
-    pub(crate) vmpl1_perms: VmplPerms,
 }
 
 impl<'a> Update<'a> {
@@ -219,18 +201,12 @@ impl<'a> Update<'a> {
     pub fn new(
         start_gfn: u64,
         uaddr: &'a [u8],
-        imi_page: bool,
         page_type: PageType,
-        perms: (VmplPerms, VmplPerms, VmplPerms),
     ) -> Self {
         Self {
             start_gfn,
             uaddr,
-            imi_page,
             page_type,
-            vmpl3_perms: perms.2,
-            vmpl2_perms: perms.1,
-            vmpl1_perms: perms.0,
         }
     }
 }
