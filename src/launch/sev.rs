@@ -34,6 +34,7 @@ pub struct Measured(Handle, Measurement);
 pub struct Finished;
 
 /// Facilitates the correct execution of the SEV launch process.
+#[derive(Debug)]
 pub struct Launcher<T, U: AsRawFd, V: AsRawFd> {
     state: T,
     vm_fd: U,

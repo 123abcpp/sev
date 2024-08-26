@@ -64,6 +64,7 @@ impl std::fmt::Display for Identifier {
 
 /// A handle to the SEV platform.
 #[cfg(target_os = "linux")]
+#[derive(Debug)]
 pub struct Firmware(File);
 
 #[cfg(target_os = "linux")]

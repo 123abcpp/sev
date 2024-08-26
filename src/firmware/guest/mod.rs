@@ -50,6 +50,7 @@ use std::fs::{File, OpenOptions};
 
 /// A handle to the SEV-SNP guest device.
 #[cfg(target_os = "linux")]
+#[derive(Debug)]
 pub struct Firmware(File);
 
 #[cfg(target_os = "linux")]
