@@ -12,6 +12,7 @@ use crate::launch::linux::{ioctl::*, snp::*};
 use std::{io::Result, marker::PhantomData, os::unix::io::AsRawFd};
 
 use bitflags::bitflags;
+use kvm_ioctls::VmFd;
 use serde::{Deserialize, Serialize};
 
 /// Launcher type-state that indicates a brand new launch.
@@ -24,32 +25,16 @@ pub struct Started;
 
 /// Facilitates the correct execution of the SEV launch process.
 #[derive(Debug)]
-pub struct Launcher<T, U: AsRawFd, V: AsRawFd> {
-    vm_fd: U,
+pub struct Launcher<T, V: AsRawFd> {
     sev: V,
     state: PhantomData<T>,
 }
 
-impl<T, U: AsRawFd, V: AsRawFd> AsRef<U> for Launcher<T, U, V> {
-    /// Give access to the vm fd to create vCPUs or such.
-    fn as_ref(&self) -> &U {
-        &self.vm_fd
-    }
-}
-
-impl<T, U: AsRawFd, V: AsRawFd> AsMut<U> for Launcher<T, U, V> {
-    /// Give access to the vm fd to create vCPUs or such.
-    fn as_mut(&mut self) -> &mut U {
-        &mut self.vm_fd
-    }
-}
-
-impl<U: AsRawFd, V: AsRawFd> Launcher<New, U, V> {
+impl<V: AsRawFd> Launcher<New, V> {
     /// Begin the SEV-SNP launch process by creating a Launcher and issuing the
     /// KVM_SNP_INIT ioctl.
-    pub fn new(vm_fd: U, sev: V) -> Result<Self> {
+    pub fn new(vm_fd: &mut VmFd, sev: V) -> Result<Self> {
         let mut launcher = Launcher {
-            vm_fd,
             sev,
             state: PhantomData,
         };
@@ -58,23 +43,22 @@ impl<U: AsRawFd, V: AsRawFd> Launcher<New, U, V> {
 
         let mut cmd = Command::from(&launcher.sev, &init);
         SNP_INIT
-            .ioctl(&mut launcher.vm_fd, &mut cmd)
+            .ioctl(vm_fd, &mut cmd)
             .map_err(|e| cmd.encapsulate(e))?;
 
         Ok(launcher)
     }
 
     /// Initialize the flow to launch a guest.
-    pub fn start(mut self, start: Start) -> Result<Launcher<Started, U, V>> {
+    pub fn start(mut self, vm_fd: &mut VmFd, start: Start) -> Result<Launcher<Started, V>> {
         let mut launch_start = LaunchStart::from(start);
         let mut cmd = Command::from_mut(&self.sev, &mut launch_start);
 
         SNP_LAUNCH_START
-            .ioctl(&mut self.vm_fd, &mut cmd)
+            .ioctl(vm_fd, &mut cmd)
             .map_err(|e| cmd.encapsulate(e))?;
 
         let launcher = Launcher {
-            vm_fd: self.vm_fd,
             sev: self.sev,
             state: PhantomData,
         };
@@ -83,31 +67,31 @@ impl<U: AsRawFd, V: AsRawFd> Launcher<New, U, V> {
     }
 }
 
-impl<U: AsRawFd, V: AsRawFd> Launcher<Started, U, V> {
+impl<V: AsRawFd> Launcher<Started, V> {
     /// Encrypt guest SNP data.
-    pub fn update_data(&mut self, update: Update) -> Result<()> {
+    pub fn update_data(&mut self, vm_fd: &mut VmFd, update: Update) -> Result<()> {
         let launch_update_data = LaunchUpdate::from(update);
         let mut cmd = Command::from(&self.sev, &launch_update_data);
 
         //KvmEncRegion::new(update.uaddr).register(&mut self.vm_fd)?;
 
         SNP_LAUNCH_UPDATE
-            .ioctl(&mut self.vm_fd, &mut cmd)
+            .ioctl(vm_fd, &mut cmd)
             .map_err(|e| cmd.encapsulate(e))?;
 
         Ok(())
     }
 
     /// Complete the SNP launch process.
-    pub fn finish(mut self, finish: Finish) -> Result<(U, V)> {
+    pub fn finish(self, vm_fd: &mut VmFd, finish: Finish) -> Result<V> {
         let launch_finish = LaunchFinish::from(finish);
         let mut cmd = Command::from(&self.sev, &launch_finish);
 
         SNP_LAUNCH_FINISH
-            .ioctl(&mut self.vm_fd, &mut cmd)
+            .ioctl(vm_fd, &mut cmd)
             .map_err(|e| cmd.encapsulate(e))?;
 
-        Ok((self.vm_fd, self.sev))
+        Ok(self.sev)
     }
 }
 
@@ -172,16 +156,12 @@ pub struct Start {
 
     /// Hypervisor provided value to indicate guest OS visible workarounds.The format is hypervisor defined.
     pub(crate) gosvw: [u8; 16],
-
 }
 
 impl Start {
     /// Encapsulate all data needed for the SNP_LAUNCH_START ioctl.
     pub fn new(policy: Policy, gosvw: [u8; 16]) -> Self {
-        Self {
-            policy,
-            gosvw,
-        }
+        Self { policy, gosvw }
     }
 }
 
@@ -196,16 +176,11 @@ pub struct Update<'a> {
 
     /// Encoded page type.
     pub(crate) page_type: PageType,
-
 }
 
 impl<'a> Update<'a> {
     /// Encapsulate all data needed for the SNP_LAUNCH_UPDATE ioctl.
-    pub fn new(
-        start_gfn: u64,
-        uaddr: &'a [u8],
-        page_type: PageType,
-    ) -> Self {
+    pub fn new(start_gfn: u64, uaddr: &'a [u8], page_type: PageType) -> Self {
         Self {
             start_gfn,
             uaddr,

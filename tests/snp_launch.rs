@@ -57,7 +57,7 @@ fn snp() {
     }
 
     let sev = Firmware::open().unwrap();
-    let launcher = Launcher::new(vm_fd, sev).unwrap();
+    let launcher = Launcher::new(&mut vm_fd, sev).unwrap();
 
     let start = Start::new(
         Policy {
@@ -67,7 +67,7 @@ fn snp() {
         [0; 16],
     );
 
-    let mut launcher = launcher.start(start).unwrap();
+    let mut launcher = launcher.start(&mut vm_fd, start).unwrap();
 
     // If VMPL is not enabled, perms must be zero
     let dp = VmplPerms::empty();
@@ -78,7 +78,7 @@ fn snp() {
         PageType::Normal,
     );
 
-    launcher.update_data(update).unwrap();
+    launcher.update_data(&mut vm_fd, update).unwrap();
 
     let finish = Finish::new(None, None, [0u8; 32]);
 
@@ -94,7 +94,7 @@ fn snp() {
     sregs.cs.selector = 0;
     vcpu_fd.set_sregs(&sregs).unwrap();
 
-    let (_vm_fd, _sev) = launcher.finish(finish).unwrap();
+    let (_vm_fd, _sev) = launcher.finish(&mut vm_fd, finish).unwrap();
 
     let ret = vcpu_fd.run();
 
